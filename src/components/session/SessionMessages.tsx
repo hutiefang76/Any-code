@@ -99,7 +99,7 @@ export const SessionMessages = forwardRef<SessionMessagesRef, SessionMessagesPro
   parentRef
 }, ref) => {
   // ✅ 从 SessionContext 获取配置和回调，避免 Props Drilling
-  const { settings, session, sessionId, projectId, projectPath, onLinkDetected, onRevert, getPromptIndexForMessage } = useSession();
+  const { settings, sessionId, projectId, projectPath, onLinkDetected, onRevert, getPromptIndexForMessage } = useSession();
   /**
    * ✅ OPTIMIZED: Virtual list configuration for improved performance
    */

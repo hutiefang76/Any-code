@@ -269,8 +269,10 @@ const isMessageGroupEqual = (prev: MessageGroup | undefined, next: MessageGroup 
   // 比较类型
   if (prev.type !== next.type) return false;
 
-  // 比较主消息
-  if (!isMessageEqual(prev.message, next.message)) return false;
+  // 对于普通消息，比较 message
+  if (prev.type === 'normal' && next.type === 'normal') {
+    return isMessageEqual(prev.message, next.message);
+  }
 
   // 对于子代理组，比较子消息数量
   if (prev.type === 'subagent' && next.type === 'subagent') {
