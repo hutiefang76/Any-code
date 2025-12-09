@@ -5,7 +5,7 @@ export const ClaudeIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement
   return (
     <svg
       viewBox="0 0 100 100"
-      fill="currentColor"
+      fill="#D97706"
       xmlns="http://www.w3.org/2000/svg"
       className={cn("w-6 h-6", className)}
       {...props}
