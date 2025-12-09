@@ -116,6 +116,28 @@ export const SessionMessages = forwardRef<SessionMessagesRef, SessionMessagesPro
         return 400; // Subagent groups are typically larger
       }
 
+      // For aggregated groups, estimate height based on content
+      if (messageGroup.type === 'aggregated') {
+        // Base height for bubble padding etc
+        let height = 60;
+        messageGroup.messages.forEach(msg => {
+            // Add height for thinking blocks
+            if (msg.type === 'thinking' || (msg.message?.content && Array.isArray(msg.message.content) && msg.message.content.some((c:any) => c.type === 'thinking'))) {
+                height += 100;
+            }
+            // Add height for tool calls
+            if (msg.message?.content && Array.isArray(msg.message.content)) {
+                const toolCalls = msg.message.content.filter((c:any) => c.type === 'tool_use');
+                height += toolCalls.length * 60;
+                
+                // Add height for tool results (if visible)
+                const toolResults = msg.message.content.filter((c:any) => c.type === 'tool_result');
+                height += toolResults.length * 40;
+            }
+        });
+        return Math.max(height, 100);
+      }
+
       // For normal messages, estimate based on message type
       const message = messageGroup.message;
       if (!message) return 200;

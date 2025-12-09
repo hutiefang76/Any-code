@@ -91,6 +91,49 @@ const StreamMessageV2Component: React.FC<StreamMessageV2Props> = ({
           onLinkDetected={onLinkDetected}
         />
       );
+    } else if (messageGroup.type === 'aggregated') {
+      // 处理聚合消息组：将多个连续的技术性消息合并为一个 AI 消息
+      const messages = messageGroup.messages;
+      if (!messages || messages.length === 0) return null;
+
+      const baseMessage = messages[0];
+      const aggregatedContent: any[] = [];
+
+      messages.forEach(msg => {
+        // 提取 assistant 消息的内容
+        if (msg.message?.content && Array.isArray(msg.message.content)) {
+          aggregatedContent.push(...msg.message.content);
+        }
+        // 提取 thinking 消息的内容
+        else if (msg.type === 'thinking') {
+          aggregatedContent.push({
+            type: 'thinking',
+            thinking: (msg as any).content || ''
+          });
+        }
+      });
+
+      // 构建合成消息
+      const mergedMessage: ClaudeStreamMessage = {
+        ...baseMessage,
+        type: 'assistant', // 强制设为 assistant 以便 AIMessage 渲染
+        message: {
+          role: 'assistant',
+          content: aggregatedContent
+        },
+        // 使用最后一条消息的时间戳
+        timestamp: messages[messages.length - 1].timestamp,
+        receivedAt: messages[messages.length - 1].receivedAt,
+      };
+
+      return (
+        <AIMessage
+          message={mergedMessage}
+          isStreaming={isStreaming}
+          onLinkDetected={onLinkDetected}
+          className={className}
+        />
+      );
     }
     // 普通消息组，使用原消息渲染
     message = messageGroup.message;
@@ -295,6 +338,15 @@ const isMessageGroupEqual = (prev: MessageGroup | undefined, next: MessageGroup 
           return false;
         }
       }
+    }
+  }
+  
+  // 对于聚合消息组
+  if (prev.type === 'aggregated' && next.type === 'aggregated') {
+    if (prev.messages.length !== next.messages.length) return false;
+    // 比较每条消息
+    for (let i = 0; i < prev.messages.length; i++) {
+      if (!isMessageEqual(prev.messages[i], next.messages[i])) return false;
     }
   }
 

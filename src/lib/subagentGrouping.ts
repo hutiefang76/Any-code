@@ -34,7 +34,8 @@ export interface SubagentGroup {
  */
 export type MessageGroup = 
   | { type: 'normal'; message: ClaudeStreamMessage; index: number }
-  | { type: 'subagent'; group: SubagentGroup };
+  | { type: 'subagent'; group: SubagentGroup }
+  | { type: 'aggregated'; messages: ClaudeStreamMessage[]; index: number }; // 新增：聚合消息组
 
 /**
  * 检查消息是否包含 Task 工具调用
@@ -104,6 +105,41 @@ export function isSubagentMessage(message: ClaudeStreamMessage): boolean {
  */
 export function getParentToolUseId(message: ClaudeStreamMessage): string | null {
   return (message as any).parent_tool_use_id || null;
+}
+
+/**
+ * 判断消息是否为"技术性"消息（可以聚合）
+ * 
+ * 可聚合的消息特征：
+ * 1. 类型为 assistant 或 thinking
+ * 2. 仅包含 tool_use, tool_result, thinking
+ * 3. 不包含用户可见的文本内容（或者文本内容为空）
+ */
+function isTechnicalMessage(message: ClaudeStreamMessage): boolean {
+  // 如果是 thinking 类型的消息，总是可以聚合
+  if (message.type === 'thinking') return true;
+  
+  // 必须是 assistant 类型
+  if (message.type !== 'assistant') return false;
+  
+  const content = message.message?.content;
+  if (!Array.isArray(content)) return false; // 纯字符串文本不聚合
+  
+  // 检查内容项
+  return content.every((item: any) => {
+    // 允许的类型
+    if (item.type === 'tool_use') return true;
+    if (item.type === 'tool_result') return true;
+    if (item.type === 'thinking') return true;
+    
+    // 文本类型：只有空白字符才允许
+    if (item.type === 'text') {
+      return !item.text || item.text.trim().length === 0;
+    }
+    
+    // 其他类型不允许聚合
+    return false;
+  });
 }
 
 /**
@@ -187,7 +223,10 @@ export function groupMessages(messages: ClaudeStreamMessage[]): MessageGroup[] {
   // 记录已添加的 Task 组（避免重复）
   const addedTaskGroups = new Set<string>();
 
-  // 第三遍：构建最终的分组列表
+  // 临时存储初步分组结果
+  const intermediateGroups: MessageGroup[] = [];
+
+  // 第三遍：构建初步的分组列表
   messages.forEach((message, index) => {
     // 跳过已被归入子代理组的消息
     if (processedIndices.has(index)) {
@@ -201,7 +240,7 @@ export function groupMessages(messages: ClaudeStreamMessage[]): MessageGroup[] {
       // ✅ FIX: 遍历所有 Task ID，为每个有子代理消息的 Task 创建分组
       taskIds.forEach(taskId => {
         if (subagentGroups.has(taskId) && !addedTaskGroups.has(taskId)) {
-          groups.push({
+          intermediateGroups.push({
             type: 'subagent',
             group: subagentGroups.get(taskId)!,
           });
@@ -213,7 +252,7 @@ export function groupMessages(messages: ClaudeStreamMessage[]): MessageGroup[] {
       // 仍然作为普通消息显示
       const hasAnySubagentGroup = taskIds.some(id => subagentGroups.has(id));
       if (!hasAnySubagentGroup) {
-        groups.push({
+        intermediateGroups.push({
           type: 'normal',
           message,
           index,
@@ -221,7 +260,7 @@ export function groupMessages(messages: ClaudeStreamMessage[]): MessageGroup[] {
       }
     } else {
       // 普通消息
-      groups.push({
+      intermediateGroups.push({
         type: 'normal',
         message,
         index,
@@ -229,7 +268,56 @@ export function groupMessages(messages: ClaudeStreamMessage[]): MessageGroup[] {
     }
   });
 
-  return groups;
+  // 第四遍：合并连续的技术性消息（Tools & Thinking）
+  // 遍历 intermediateGroups，将连续的符合条件的消息合并为 'aggregated' 类型
+  const finalGroups: MessageGroup[] = [];
+  let currentAggregation: { messages: ClaudeStreamMessage[]; startIndex: number } | null = null;
+
+  intermediateGroups.forEach((group) => {
+    if (group.type === 'subagent') {
+      // 遇到子代理组，先结算当前的聚合
+      if (currentAggregation) {
+        finalGroups.push({
+          type: 'aggregated',
+          messages: currentAggregation.messages,
+          index: currentAggregation.startIndex
+        });
+        currentAggregation = null;
+      }
+      finalGroups.push(group);
+    } else {
+      // normal group
+      const msg = group.message;
+      if (isTechnicalMessage(msg)) {
+        if (!currentAggregation) {
+          currentAggregation = { messages: [], startIndex: group.index };
+        }
+        currentAggregation.messages.push(msg);
+      } else {
+        // 不可聚合的消息，先结算之前的
+        if (currentAggregation) {
+          finalGroups.push({
+            type: 'aggregated',
+            messages: currentAggregation.messages,
+            index: currentAggregation.startIndex
+          });
+          currentAggregation = null;
+        }
+        finalGroups.push(group);
+      }
+    }
+  });
+
+  // 结算最后的聚合
+  if (currentAggregation) {
+    finalGroups.push({
+      type: 'aggregated',
+      messages: currentAggregation.messages,
+      index: currentAggregation.startIndex
+    });
+  }
+
+  return finalGroups;
 }
 
 /**
