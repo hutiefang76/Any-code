@@ -993,7 +993,14 @@
     "selected": "Selected",
     "failed": "Failed",
     "completed": "Completed",
-    "running": "Running"
+    "running": "Running",
+    "searching": "Searching...",
+    "foundFiles": "Found {count} files",
+    "noMatchesFound": "No matches found",
+    "fileContainsMatch": "(file contains matches)",
+    "matchedLine": "(matched line)",
+    "matches": "matches",
+    "noResults": "No results"
   },
   "usageDashboard": {
     "today": "Today",

@@ -7,6 +7,7 @@
  */
 
 import React, { useState, useRef, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Search, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +33,7 @@ export interface GlobWidgetProps {
  * 支持结果自动折叠和展开/收起功能
  */
 export const GlobWidget: React.FC<GlobWidgetProps> = ({ pattern, result, defaultCollapsed }) => {
+  const { t } = useTranslation();
   const resultRef = useRef<HTMLDivElement>(null);
   const [isCollapsed, setIsCollapsed] = useState(true);
 
@@ -109,7 +111,7 @@ export const GlobWidget: React.FC<GlobWidgetProps> = ({ pattern, result, default
           {!result && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <div className="h-1.5 w-1.5 bg-blue-500 rounded-full animate-pulse" />
-              <span>搜索中...</span>
+              <span>{t('widget.searching')}</span>
             </div>
           )}
 
@@ -117,7 +119,7 @@ export const GlobWidget: React.FC<GlobWidgetProps> = ({ pattern, result, default
           {result && !isError && (
             <div className="flex items-center gap-2 text-xs flex-shrink-0">
               <span className="text-green-600 dark:text-green-400 font-medium">
-                找到 {fileCount} 个文件
+                {t('widget.foundFiles', { count: fileCount })}
               </span>
             </div>
           )}
@@ -125,7 +127,7 @@ export const GlobWidget: React.FC<GlobWidgetProps> = ({ pattern, result, default
           {result && isError && (
             <div className="flex items-center gap-2 text-xs flex-shrink-0">
               <span className="text-red-600 dark:text-red-400 font-medium">
-                搜索失败
+                {t('widget.searchFailed')}
               </span>
             </div>
           )}
@@ -159,7 +161,7 @@ export const GlobWidget: React.FC<GlobWidgetProps> = ({ pattern, result, default
             )}
             style={{ fontSize: '0.8rem', lineHeight: '1.5' }}
           >
-            {resultContent || (isError ? "搜索失败" : "No matches found")}
+            {resultContent || (isError ? t('widget.searchFailed') : t('widget.noMatchesFound'))}
           </div>
         </div>
       )}

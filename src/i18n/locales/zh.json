@@ -993,7 +993,14 @@
     "selected": "已选择",
     "failed": "失败",
     "completed": "完成",
-    "running": "运行中"
+    "running": "运行中",
+    "searching": "搜索中...",
+    "foundFiles": "找到 {count} 个文件",
+    "noMatchesFound": "No matches found",
+    "fileContainsMatch": "(文件包含匹配项)",
+    "matchedLine": "(匹配行)",
+    "matches": "个匹配",
+    "noResults": "无结果"
   },
   "usageDashboard": {
     "today": "今日",

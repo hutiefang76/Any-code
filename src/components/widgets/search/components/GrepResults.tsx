@@ -5,6 +5,7 @@
  */
 
 import React, { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { FileText, AlertCircle, Info, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -93,6 +94,8 @@ export const GrepResults: React.FC<GrepResultsProps> = ({
   isExpanded,
   onToggle,
 }) => {
+  const { t } = useTranslation();
+  
   // 解析结果（使用 useMemo 避免重复解析）
   const grepResults = useMemo(() => {
     return parseGrepResults(resultContent, isError);
@@ -111,13 +114,13 @@ export const GrepResults: React.FC<GrepResultsProps> = ({
           ) : (
             <ChevronRight className="h-3.5 w-3.5" />
           )}
-          <span>搜索失败</span>
+          <span>{t('widget.searchFailed')}</span>
         </button>
         {isExpanded && (
           <div className="flex items-center gap-3 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
             <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
             <div className="text-sm text-red-600 dark:text-red-400">
-              {resultContent || "搜索失败"}
+              {resultContent || t('widget.searchFailed')}
             </div>
           </div>
         )}
