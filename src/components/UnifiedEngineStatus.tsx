@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { Loader2, AlertCircle, BrainCircuit, Bot, Code2, Sparkles } from "lucide-react";
+import { Loader2, AlertCircle, Bot, Code2, Sparkles, CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { api, type ProcessInfo } from "@/lib/api";
+import { api } from "@/lib/api";
 import {
   Tooltip,
   TooltipContent,
@@ -17,7 +16,9 @@ interface UnifiedEngineStatusProps {
 
 interface EngineStatus {
   type: 'claude' | 'codex' | 'gemini';
-  count: number;
+  isInstalled: boolean;
+  statusText: string;
+  version?: string;
   label: string;
   icon: React.ElementType;
   color: string;
@@ -27,61 +28,80 @@ export const UnifiedEngineStatus: React.FC<UnifiedEngineStatusProps> = ({
   className,
   compact = false,
 }) => {
-  const [claudeCount, setClaudeCount] = useState(0);
-  const [codexCount, setCodexCount] = useState(0);
-  const [geminiCount, setGeminiCount] = useState(0);
+  const [statuses, setStatuses] = useState<EngineStatus[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Load status function
   const loadStatus = async () => {
     try {
-      // Load Claude sessions
-      const claudeSessions = await api.listRunningClaudeSessions();
-      setClaudeCount(claudeSessions.length);
-
-      // For now, we'll use placeholder logic for Codex/Gemini running status
-      // Since we don't have explicit "listRunningCodexSessions" yet, 
-      // we can assume 0 or implement similar logic if backend supports it.
-      // If backend adds support later, we update this.
-      // Current architecture might not track them as "running processes" in the same registry.
-      // But let's prepare the UI structure.
+      // Check Claude
+      const claudeStatus = await api.checkClaudeVersion();
       
-      setCodexCount(0); 
-      setGeminiCount(0);
+      // Check Codex (Configuration check)
+      let codexInstalled = false;
+      let codexVersion = '';
+      try {
+        const codexConfig = await api.getCurrentCodexConfig();
+        // Assuming if auth/config exist, it's configured. 
+        // Or check actual binary if available (checkCodexAvailability)
+        const codexCheck = await api.checkCodexAvailability();
+        codexInstalled = codexCheck.available;
+        codexVersion = codexCheck.version || '';
+      } catch (e) {
+        console.warn("Codex check failed", e);
+      }
+
+      // Check Gemini (Installation check)
+      let geminiInstalled = false;
+      let geminiVersion = '';
+      try {
+        const geminiCheck = await api.checkGeminiInstalled();
+        geminiInstalled = geminiCheck.installed;
+        geminiVersion = geminiCheck.version || '';
+      } catch (e) {
+        console.warn("Gemini check failed", e);
+      }
+
+      setStatuses([
+        { 
+          type: 'claude', 
+          isInstalled: claudeStatus.is_installed, 
+          statusText: claudeStatus.is_installed ? '已安装' : '未检测到',
+          version: claudeStatus.version,
+          label: 'Claude Code', 
+          icon: Bot, 
+          color: 'text-orange-500' 
+        },
+        { 
+          type: 'codex', 
+          isInstalled: codexInstalled, 
+          statusText: codexInstalled ? '已配置' : '未配置',
+          version: codexVersion,
+          label: 'OpenAI Codex', 
+          icon: Code2, 
+          color: 'text-blue-500' 
+        },
+        { 
+          type: 'gemini', 
+          isInstalled: geminiInstalled, 
+          statusText: geminiInstalled ? '已安装' : '未安装',
+          version: geminiVersion,
+          label: 'Google Gemini', 
+          icon: Sparkles, 
+          color: 'text-purple-500' 
+        },
+      ]);
 
     } catch (err) {
-      console.error("Failed to load engine status:", err);
+      console.error("Failed to load engine statuses:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Listen for state changes
   useEffect(() => {
-    let unlistenFn: UnlistenFn | null = null;
-
-    const setupListener = async () => {
-      await loadStatus();
-      unlistenFn = await listen<any>('claude-session-state', async () => {
-        await loadStatus();
-      });
-    };
-
-    setupListener();
-
-    return () => {
-      if (unlistenFn) unlistenFn();
-    };
+    loadStatus();
+    // Optional: Listen for configuration changes if events exist
   }, []);
-
-  const engines: EngineStatus[] = [
-    { type: 'claude', count: claudeCount, label: 'Claude Code', icon: Bot, color: 'text-orange-500' },
-    { type: 'codex', count: codexCount, label: 'OpenAI Codex', icon: Code2, color: 'text-blue-500' },
-    { type: 'gemini', count: geminiCount, label: 'Google Gemini', icon: Sparkles, color: 'text-purple-500' },
-  ];
-
-  const activeEngines = engines.filter(e => e.count > 0);
-  const totalActive = activeEngines.reduce((acc, curr) => acc + curr.count, 0);
 
   if (loading) {
     return (
@@ -91,72 +111,59 @@ export const UnifiedEngineStatus: React.FC<UnifiedEngineStatusProps> = ({
     );
   }
 
-  if (totalActive === 0) {
-    return (
-      <div className={cn("flex items-center gap-2 text-muted-foreground/50 text-xs select-none px-2 py-1", className)}>
-        <BrainCircuit className="h-3.5 w-3.5" />
-        {!compact && <span>无运行任务</span>}
-      </div>
-    );
-  }
-
   return (
     <div className={cn("flex flex-col gap-1 w-full", className)}>
       {compact ? (
         // Compact view (collapsed sidebar)
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex flex-col items-center gap-1 relative group cursor-help">
-                <div className="relative">
-                  <BrainCircuit className="h-5 w-5 text-primary animate-pulse" />
-                  <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-green-500 text-[8px] text-white font-bold">
-                    {totalActive}
-                  </span>
-                </div>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="right" className="p-3 min-w-[160px]">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold border-b pb-1">运行中的任务</p>
-                {activeEngines.map((engine) => (
-                  <div key={engine.type} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <engine.icon className={cn("h-3.5 w-3.5", engine.color)} />
-                      <span>{engine.label}</span>
-                    </div>
-                    <span className="font-mono bg-muted px-1.5 rounded text-[10px]">
-                      {engine.count}
-                    </span>
+        <div className="flex flex-col items-center gap-2">
+          {statuses.map((engine) => (
+            <TooltipProvider key={engine.type}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="relative group cursor-help">
+                    <engine.icon className={cn("h-5 w-5 transition-opacity", engine.isInstalled ? engine.color : "text-muted-foreground/40")} />
+                    <div className={cn(
+                      "absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-background",
+                      engine.isInstalled ? "bg-green-500" : "bg-red-500"
+                    )} />
                   </div>
-                ))}
-              </div>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="p-2">
+                  <div className="text-xs font-medium flex items-center gap-2">
+                    <engine.icon className={cn("h-3.5 w-3.5", engine.color)} />
+                    <span>{engine.label}</span>
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-1">
+                    {engine.statusText} {engine.version && `(${engine.version})`}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ))}
+        </div>
       ) : (
         // Expanded view
         <div className="space-y-2 px-2">
-          <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-            <span className="font-medium">运行状态</span>
-            <span className="bg-green-500/10 text-green-600 px-1.5 py-0.5 rounded text-[10px]">
-              {totalActive} 活跃
-            </span>
+          <div className="text-xs font-medium text-muted-foreground mb-1 ml-1">
+            引擎状态
           </div>
           
           <div className="grid gap-1.5">
-            {activeEngines.map((engine) => (
+            {statuses.map((engine) => (
               <div 
                 key={engine.type} 
                 className="flex items-center justify-between bg-muted/30 hover:bg-muted/50 rounded px-2 py-1.5 transition-colors border border-transparent hover:border-border/50"
               >
                 <div className="flex items-center gap-2">
-                  <engine.icon className={cn("h-3.5 w-3.5", engine.color)} />
-                  <span className="text-xs">{engine.label}</span>
+                  <engine.icon className={cn("h-3.5 w-3.5", engine.isInstalled ? engine.color : "text-muted-foreground")} />
+                  <span className={cn("text-xs", !engine.isInstalled && "text-muted-foreground")}>{engine.label}</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                  <span className="text-xs font-mono">{engine.count}</span>
+                <div className="flex items-center gap-1.5">
+                  {engine.isInstalled ? (
+                    <CheckCircle2 className="h-3 w-3 text-green-500" />
+                  ) : (
+                    <XCircle className="h-3 w-3 text-red-500" />
+                  )}
                 </div>
               </div>
             ))}
