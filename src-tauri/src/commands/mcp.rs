@@ -761,3 +761,130 @@ pub async fn mcp_save_project_config(
 
     Ok("Project MCP configuration saved".to_string())
 }
+
+// ============================================================================
+// 多应用 MCP 支持命令（新增）
+// ============================================================================
+
+use crate::mcp::{AppType, McpApps, McpServer};
+
+/// 获取 Claude MCP 配置状态
+#[tauri::command]
+pub async fn mcp_get_claude_status() -> Result<crate::claude_mcp::McpStatus, String> {
+    crate::claude_mcp::get_mcp_status()
+}
+
+/// 添加或更新 MCP 服务器（支持多应用）
+#[tauri::command]
+pub async fn mcp_upsert_server(
+    id: String,
+    name: String,
+    server_spec: serde_json::Value,
+    apps: McpApps,
+) -> Result<String, String> {
+    info!("Upserting MCP server: {} for apps: {:?}", id, apps);
+
+    // 验证服务器规范
+    crate::mcp::validate_server_spec(&server_spec)?;
+
+    // 创建服务器结构
+    let server = McpServer {
+        id: id.clone(),
+        name,
+        server: server_spec,
+        apps,
+        description: None,
+        homepage: None,
+        docs: None,
+        tags: Vec::new(),
+    };
+
+    // 同步到所有启用的应用
+    crate::mcp::sync_server_to_apps(&server)?;
+
+    Ok(format!("MCP 服务器 '{}' 已成功配置", id))
+}
+
+/// 删除 MCP 服务器（从所有应用）
+#[tauri::command]
+pub async fn mcp_delete_server(id: String, apps: McpApps) -> Result<String, String> {
+    info!("Deleting MCP server: {} from apps: {:?}", id, apps);
+
+    // 创建服务器结构用于删除
+    let server = McpServer {
+        id: id.clone(),
+        name: id.clone(),
+        server: serde_json::json!({}),
+        apps,
+        description: None,
+        homepage: None,
+        docs: None,
+        tags: Vec::new(),
+    };
+
+    // 从所有启用的应用中移除
+    crate::mcp::remove_server_from_all_apps(&server)?;
+
+    Ok(format!("MCP 服务器 '{}' 已成功删除", id))
+}
+
+/// 切换 MCP 服务器在指定应用的启用状态
+#[tauri::command]
+pub async fn mcp_toggle_app(
+    id: String,
+    server_spec: serde_json::Value,
+    app: String,
+    enabled: bool,
+) -> Result<String, String> {
+    info!(
+        "Toggling MCP server '{}' for app '{}': {}",
+        id, app, enabled
+    );
+
+    let app_type = AppType::from_str(&app)?;
+
+    if enabled {
+        // 启用：同步到应用
+        crate::mcp::sync_server_to_app(&id, &server_spec, &app_type)?;
+    } else {
+        // 禁用：从应用移除
+        crate::mcp::remove_server_from_app(&id, &app_type)?;
+    }
+
+    Ok(format!(
+        "MCP 服务器 '{}' 在 {} 中已{}",
+        id,
+        app,
+        if enabled { "启用" } else { "禁用" }
+    ))
+}
+
+/// 从指定应用导入 MCP 服务器
+#[tauri::command]
+pub async fn mcp_import_from_app(app: String) -> Result<Vec<String>, String> {
+    info!("Importing MCP servers from app: {}", app);
+
+    let app_type = AppType::from_str(&app)?;
+    let servers = crate::mcp::import_from_app(&app_type)?;
+
+    let server_ids: Vec<String> = servers.keys().cloned().collect();
+    Ok(server_ids)
+}
+
+/// 验证命令是否在 PATH 中可用
+#[tauri::command]
+pub async fn mcp_validate_command(cmd: String) -> Result<bool, String> {
+    crate::claude_mcp::validate_command_in_path(&cmd)
+}
+
+/// 读取 Claude MCP 配置文本内容
+#[tauri::command]
+pub async fn mcp_read_claude_config() -> Result<Option<String>, String> {
+    crate::claude_mcp::read_mcp_json()
+}
+
+/// 获取所有 MCP 服务器（从 Claude 配置）
+#[tauri::command]
+pub async fn mcp_get_all_servers() -> Result<std::collections::HashMap<String, serde_json::Value>, String> {
+    crate::claude_mcp::read_mcp_servers_map()
+}

@@ -5,6 +5,12 @@ mod claude_binary;
 mod commands;
 mod process;
 
+// MCP 多应用支持模块
+mod mcp;
+mod claude_mcp;
+mod codex_mcp;
+mod gemini_mcp;
+
 use claude_binary::init_shell_environment;
 
 use std::sync::{Arc, Mutex};
@@ -31,6 +37,9 @@ use commands::mcp::{
     mcp_add, mcp_add_from_claude_desktop, mcp_add_json, mcp_export_config, mcp_get,
     mcp_get_server_status, mcp_list, mcp_read_project_config, mcp_remove,
     mcp_reset_project_choices, mcp_save_project_config, mcp_serve, mcp_test_connection,
+    // 多应用 MCP 支持（新增）
+    mcp_get_claude_status, mcp_upsert_server, mcp_delete_server, mcp_toggle_app,
+    mcp_import_from_app, mcp_validate_command, mcp_read_claude_config, mcp_get_all_servers,
 };
 use commands::storage::{init_database, AgentDb};
 
@@ -334,6 +343,15 @@ fn main() {
             mcp_export_config,
             mcp_read_project_config,
             mcp_save_project_config,
+            // MCP 多应用支持（新增）
+            mcp_get_claude_status,
+            mcp_upsert_server,
+            mcp_delete_server,
+            mcp_toggle_app,
+            mcp_import_from_app,
+            mcp_validate_command,
+            mcp_read_claude_config,
+            mcp_get_all_servers,
             // Storage Management
             storage_list_tables,
             storage_read_table,

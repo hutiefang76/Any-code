@@ -400,39 +400,97 @@ export interface CurrentGeminiProviderConfig {
   selectedAuthType?: string; // 认证类型
 }
 
+// ============================================================================
+// MCP 多应用支持类型定义（新版）
+// ============================================================================
+
 /**
- * Represents an MCP server configuration
+ * MCP 服务器规范（实际配置）
+ */
+export interface MCPServerSpec {
+  /** 传输类型：stdio/http/sse */
+  type?: "stdio" | "http" | "sse";
+  /** 命令（stdio 类型） */
+  command?: string;
+  /** 命令参数 */
+  args?: string[];
+  /** 环境变量 */
+  env?: Record<string, string>;
+  /** URL（http/sse 类型） */
+  url?: string;
+}
+
+/**
+ * MCP 应用启用状态
+ */
+export interface McpApps {
+  /** 是否在 Claude 中启用 */
+  claude: boolean;
+  /** 是否在 Codex 中启用 */
+  codex: boolean;
+  /** 是否在 Gemini 中启用 */
+  gemini: boolean;
+}
+
+/**
+ * MCP 服务器（统一结构）
+ */
+export interface McpServer {
+  /** 服务器 ID */
+  id: string;
+  /** 显示名称 */
+  name: string;
+  /** 服务器配置 */
+  server: MCPServerSpec;
+  /** 应用启用状态 */
+  apps: McpApps;
+  /** 描述 */
+  description?: string;
+  /** 主页 */
+  homepage?: string;
+  /** 文档链接 */
+  docs?: string;
+  /** 标签 */
+  tags?: string[];
+}
+
+/**
+ * MCP 状态
+ */
+export interface McpStatus {
+  /** 用户配置文件路径 */
+  user_config_path: string;
+  /** 配置文件是否存在 */
+  user_config_exists: boolean;
+  /** 服务器数量 */
+  server_count: number;
+}
+
+// ============================================================================
+// 旧版 MCP 类型（兼容性保留，后续可删除）
+// ============================================================================
+
+/**
+ * @deprecated 使用 McpServer 代替
  */
 export interface MCPServer {
-  /** Server name/identifier */
   name: string;
-  /** Transport type: "stdio" or "sse" */
   transport: string;
-  /** Command to execute (for stdio) */
   command?: string;
-  /** Command arguments (for stdio) */
   args: string[];
-  /** Environment variables */
   env: Record<string, string>;
-  /** URL endpoint (for SSE) */
   url?: string;
-  /** Configuration scope: "local", "project", or "user" */
   scope: string;
-  /** Whether the server is currently active */
   is_active: boolean;
-  /** Server status */
   status: ServerStatus;
 }
 
 /**
- * Server status information
+ * @deprecated
  */
 export interface ServerStatus {
-  /** Whether the server is running */
   running: boolean;
-  /** Last error message if any */
   error?: string;
-  /** Last checked timestamp */
   last_checked?: number;
 }
 
@@ -1303,6 +1361,126 @@ export const api = {
       return await invoke<string>("mcp_save_project_config", { projectPath, config });
     } catch (error) {
       console.error("Failed to save project MCP config:", error);
+      throw error;
+    }
+  },
+
+  // ============================================================================
+  // MCP 多应用支持方法（新版）
+  // ============================================================================
+
+  /**
+   * 获取 Claude MCP 配置状态
+   */
+  async mcpGetStatus(): Promise<McpStatus> {
+    try {
+      return await invoke<McpStatus>("mcp_get_claude_status");
+    } catch (error) {
+      console.error("Failed to get MCP status:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * 获取所有 MCP 服务器
+   */
+  async mcpGetAllServers(): Promise<Record<string, MCPServerSpec>> {
+    try {
+      return await invoke<Record<string, MCPServerSpec>>("mcp_get_all_servers");
+    } catch (error) {
+      console.error("Failed to get all MCP servers:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * 添加或更新 MCP 服务器（支持多应用）
+   */
+  async mcpUpsertServer(
+    id: string,
+    name: string,
+    serverSpec: MCPServerSpec,
+    apps: McpApps
+  ): Promise<string> {
+    try {
+      return await invoke<string>("mcp_upsert_server", {
+        id,
+        name,
+        serverSpec,
+        apps,
+      });
+    } catch (error) {
+      console.error("Failed to upsert MCP server:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * 删除 MCP 服务器（从所有应用）
+   */
+  async mcpDeleteServer(id: string, apps: McpApps): Promise<string> {
+    try {
+      return await invoke<string>("mcp_delete_server", { id, apps });
+    } catch (error) {
+      console.error("Failed to delete MCP server:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * 切换 MCP 服务器在指定应用的启用状态
+   */
+  async mcpToggleApp(
+    id: string,
+    serverSpec: MCPServerSpec,
+    app: string,
+    enabled: boolean
+  ): Promise<string> {
+    try {
+      return await invoke<string>("mcp_toggle_app", {
+        id,
+        serverSpec,
+        app,
+        enabled,
+      });
+    } catch (error) {
+      console.error("Failed to toggle MCP app:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * 从指定应用导入 MCP 服务器
+   */
+  async mcpImportFromApp(app: string): Promise<string[]> {
+    try {
+      return await invoke<string[]>("mcp_import_from_app", { app });
+    } catch (error) {
+      console.error("Failed to import from app:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * 验证命令是否在 PATH 中可用
+   */
+  async mcpValidateCommand(cmd: string): Promise<boolean> {
+    try {
+      return await invoke<boolean>("mcp_validate_command", { cmd });
+    } catch (error) {
+      console.error("Failed to validate command:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * 读取 Claude MCP 配置文本内容
+   */
+  async mcpReadClaudeConfig(): Promise<string | null> {
+    try {
+      return await invoke<string | null>("mcp_read_claude_config");
+    } catch (error) {
+      console.error("Failed to read Claude MCP config:", error);
       throw error;
     }
   },
