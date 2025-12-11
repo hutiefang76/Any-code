@@ -213,22 +213,23 @@ const FloatingPromptInputInner = (
                              envVars.ANTHROPIC_DEFAULT_OPUS_MODEL;
 
           if (customModel && typeof customModel === 'string') {
-            const isThirdPartyModel = !customModel.toLowerCase().includes('claude') &&
-                                     !customModel.toLowerCase().includes('sonnet') &&
-                                     !customModel.toLowerCase().includes('opus');
+            // Check if it's a built-in model ID (sonnet, opus, sonnet1m)
+            const isBuiltInModel = ['sonnet', 'opus', 'sonnet1m'].includes(customModel.toLowerCase());
 
-            if (isThirdPartyModel) {
+            if (!isBuiltInModel) {
+              // This is a custom model - add it to the list
               const customModelConfig: ModelConfig = {
                 id: "custom" as ModelType,
                 name: customModel,
-                description: "Third-party model from settings.json",
+                description: "Custom model from environment variables",
                 icon: <Sparkles className="h-4 w-4" />
               };
 
               setAvailableModels(prev => {
                 const hasCustom = prev.some(m => m.id === "custom");
                 if (!hasCustom) return [...prev, customModelConfig];
-                return prev;
+                // Update existing custom model if name changed
+                return prev.map(m => m.id === "custom" ? customModelConfig : m);
               });
             }
           }
@@ -341,7 +342,17 @@ const FloatingPromptInputInner = (
 
         finalPrompt = finalPrompt + (finalPrompt.endsWith(' ') || finalPrompt === '' ? '' : ' ') + imagePathMentions;
       }
-      onSend(finalPrompt, state.selectedModel, undefined);
+
+      // When custom model is selected, pass the actual model name instead of "custom"
+      let modelToSend = state.selectedModel;
+      if (state.selectedModel === 'custom') {
+        const customModelConfig = availableModels.find(m => m.id === 'custom');
+        if (customModelConfig) {
+          modelToSend = customModelConfig.name as ModelType;
+        }
+      }
+
+      onSend(finalPrompt, modelToSend, undefined);
       dispatch({ type: "RESET_INPUT" });
       setImageAttachments([]);
       setEmbeddedImages([]);
