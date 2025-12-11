@@ -4,9 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { SelectComponent } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
-import { api } from "@/lib/api";
+import { api, type McpApps, type MCPServerSpec } from "@/lib/api";
 
 interface MCPAddServerProps {
   /**
@@ -36,18 +35,23 @@ export const MCPAddServer: React.FC<MCPAddServerProps> = ({
 }) => {
   const [transport, setTransport] = useState<"stdio" | "sse">("stdio");
   const [saving, setSaving] = useState(false);
-  
+
+  // 应用选择器状态（新增）
+  const [apps, setApps] = useState<McpApps>({
+    claude: true,   // 默认启用 Claude
+    codex: false,
+    gemini: false,
+  });
+
   // Stdio server state
   const [stdioName, setStdioName] = useState("");
   const [stdioCommand, setStdioCommand] = useState("");
   const [stdioArgs, setStdioArgs] = useState("");
-  const [stdioScope, setStdioScope] = useState("local");
   const [stdioEnvVars, setStdioEnvVars] = useState<EnvironmentVariable[]>([]);
-  
+
   // SSE server state
   const [sseName, setSseName] = useState("");
   const [sseUrl, setSseUrl] = useState("");
-  const [sseScope, setSseScope] = useState("local");
   const [sseEnvVars, setSseEnvVars] = useState<EnvironmentVariable[]>([]);
 
   /**
@@ -102,18 +106,24 @@ export const MCPAddServer: React.FC<MCPAddServerProps> = ({
       onError("Server name is required");
       return;
     }
-    
+
     if (!stdioCommand.trim()) {
       onError("Command is required");
       return;
     }
-    
+
+    // 检查至少选择一个应用
+    if (!apps.claude && !apps.codex && !apps.gemini) {
+      onError("Please select at least one application");
+      return;
+    }
+
     try {
       setSaving(true);
-      
+
       // Parse arguments
       const args = stdioArgs.trim() ? stdioArgs.split(/\s+/) : [];
-      
+
       // Convert env vars to object (only include enabled ones)
       const env = stdioEnvVars.reduce((acc, { key, value, enabled }) => {
         if (enabled && key.trim() && value.trim()) {
@@ -121,28 +131,29 @@ export const MCPAddServer: React.FC<MCPAddServerProps> = ({
         }
         return acc;
       }, {} as Record<string, string>);
-      
-      const result = await api.mcpAdd(
-        stdioName,
-        "stdio",
-        stdioCommand,
-        args,
-        env,
-        undefined,
-        stdioScope
+
+      // 构建服务器规范（新版）
+      const serverSpec: MCPServerSpec = {
+        type: "stdio",
+        command: stdioCommand,
+        args: args,
+        env: env,
+      };
+
+      // 使用新的 API
+      await api.mcpUpsertServer(
+        stdioName,    // id
+        stdioName,    // name
+        serverSpec,
+        apps
       );
-      
-      if (result.success) {
-        // Reset form
-        setStdioName("");
-        setStdioCommand("");
-        setStdioArgs("");
-        setStdioEnvVars([]);
-        setStdioScope("local");
-        onServerAdded();
-      } else {
-        onError(result.message);
-      }
+
+      // Reset form
+      setStdioName("");
+      setStdioCommand("");
+      setStdioArgs("");
+      setStdioEnvVars([]);
+      onServerAdded();
     } catch (error) {
       onError("Failed to add server");
       console.error("Failed to add stdio server:", error);
@@ -159,15 +170,21 @@ export const MCPAddServer: React.FC<MCPAddServerProps> = ({
       onError("Server name is required");
       return;
     }
-    
+
     if (!sseUrl.trim()) {
       onError("URL is required");
       return;
     }
-    
+
+    // 检查至少选择一个应用
+    if (!apps.claude && !apps.codex && !apps.gemini) {
+      onError("Please select at least one application");
+      return;
+    }
+
     try {
       setSaving(true);
-      
+
       // Convert env vars to object (only include enabled ones)
       const env = sseEnvVars.reduce((acc, { key, value, enabled }) => {
         if (enabled && key.trim() && value.trim()) {
@@ -175,27 +192,27 @@ export const MCPAddServer: React.FC<MCPAddServerProps> = ({
         }
         return acc;
       }, {} as Record<string, string>);
-      
-      const result = await api.mcpAdd(
-        sseName,
-        "sse",
-        undefined,
-        [],
-        env,
-        sseUrl,
-        sseScope
+
+      // 构建服务器规范（新版）
+      const serverSpec: MCPServerSpec = {
+        type: "sse",
+        url: sseUrl,
+        env: env,
+      };
+
+      // 使用新的 API
+      await api.mcpUpsertServer(
+        sseName,      // id
+        sseName,      // name
+        serverSpec,
+        apps
       );
-      
-      if (result.success) {
-        // Reset form
-        setSseName("");
-        setSseUrl("");
-        setSseEnvVars([]);
-        setSseScope("local");
-        onServerAdded();
-      } else {
-        onError(result.message);
-      }
+
+      // Reset form
+      setSseName("");
+      setSseUrl("");
+      setSseEnvVars([]);
+      onServerAdded();
     } catch (error) {
       onError("Failed to add server");
       console.error("Failed to add SSE server:", error);
@@ -352,17 +369,41 @@ export const MCPAddServer: React.FC<MCPAddServerProps> = ({
                 </p>
               </div>
 
+              {/* 应用选择器（新增） */}
               <div className="space-y-2">
-                <Label htmlFor="stdio-scope">Scope</Label>
-                <SelectComponent
-                  value={stdioScope}
-                  onValueChange={(value: string) => setStdioScope(value)}
-                  options={[
-                    { value: "local", label: "Local (this project only)" },
-                    { value: "project", label: "Project (shared via .mcp.json)" },
-                    { value: "user", label: "User (all projects)" },
-                  ]}
-                />
+                <Label>启用应用</Label>
+                <div className="flex gap-4 p-3 bg-muted/30 rounded-md">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={apps.claude}
+                      onChange={(e) => setApps({ ...apps, claude: e.target.checked })}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm font-medium">Claude</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={apps.codex}
+                      onChange={(e) => setApps({ ...apps, codex: e.target.checked })}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm font-medium">Codex</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={apps.gemini}
+                      onChange={(e) => setApps({ ...apps, gemini: e.target.checked })}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm font-medium">Gemini</span>
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  选择要启用此服务器的应用（至少选择一个）
+                </p>
               </div>
 
               {renderEnvVars("stdio", stdioEnvVars)}
@@ -421,17 +462,41 @@ export const MCPAddServer: React.FC<MCPAddServerProps> = ({
                 </p>
               </div>
 
+              {/* 应用选择器（新增） */}
               <div className="space-y-2">
-                <Label htmlFor="sse-scope">Scope</Label>
-                <SelectComponent
-                  value={sseScope}
-                  onValueChange={(value: string) => setSseScope(value)}
-                  options={[
-                    { value: "local", label: "Local (this project only)" },
-                    { value: "project", label: "Project (shared via .mcp.json)" },
-                    { value: "user", label: "User (all projects)" },
-                  ]}
-                />
+                <Label>启用应用</Label>
+                <div className="flex gap-4 p-3 bg-muted/30 rounded-md">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={apps.claude}
+                      onChange={(e) => setApps({ ...apps, claude: e.target.checked })}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm font-medium">Claude</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={apps.codex}
+                      onChange={(e) => setApps({ ...apps, codex: e.target.checked })}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm font-medium">Codex</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={apps.gemini}
+                      onChange={(e) => setApps({ ...apps, gemini: e.target.checked })}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm font-medium">Gemini</span>
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  选择要启用此服务器的应用（至少选择一个）
+                </p>
               </div>
 
               {renderEnvVars("sse", sseEnvVars)}

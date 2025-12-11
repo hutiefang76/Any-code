@@ -3,9 +3,8 @@ import { Download, Upload, FileText, Loader2, Info, Settings2 } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { SelectComponent } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { api } from "@/lib/api";
+import { api, type McpApps, type MCPServerSpec } from "@/lib/api";
 
 interface MCPImportExportProps {
   /**
@@ -28,7 +27,13 @@ export const MCPImportExport: React.FC<MCPImportExportProps> = ({
   const [importingJson, setImportingJson] = useState(false);
   const [importingText, setImportingText] = useState(false);
   const [textInput, setTextInput] = useState("");
-  const [importScope, setImportScope] = useState("user");
+
+  // 应用选择（用于导入时选择启用哪些应用）
+  const [importApps, setImportApps] = useState<McpApps>({
+    claude: true,
+    codex: false,
+    gemini: false,
+  });
 
   /**
    * Handles text input import
@@ -54,37 +59,31 @@ export const MCPImportExport: React.FC<MCPImportExportProps> = ({
         let imported = 0;
         let failed = 0;
 
-        for (const [name, config] of Object.entries(jsonData.mcpServers)) {
+        for (const [id, spec] of Object.entries(jsonData.mcpServers)) {
           try {
-            const serverConfig = {
-              type: "stdio",
-              command: (config as any).command,
-              args: (config as any).args || [],
-              env: (config as any).env || {}
-            };
-            
-            const result = await api.mcpAddJson(name, JSON.stringify(serverConfig), importScope);
-            if (result.success) {
-              imported++;
-            } else {
-              failed++;
-            }
+            const serverSpec = spec as MCPServerSpec;
+
+            // 使用新的 API 添加服务器
+            await api.mcpUpsertServer(id, id, serverSpec, importApps);
+            imported++;
           } catch (e) {
+            console.error(`Failed to import server ${id}:`, e);
             failed++;
           }
         }
-        
+
         onImportCompleted(imported, failed);
       } else if (jsonData.type && jsonData.command) {
         // Single server format
         const name = prompt("请输入此服务器的名称：");
         if (!name) return;
 
-        const result = await api.mcpAddJson(name, textInput, importScope);
-        if (result.success) {
+        try {
+          const serverSpec = jsonData as MCPServerSpec;
+          await api.mcpUpsertServer(name, name, serverSpec, importApps);
           onImportCompleted(1, 0);
-        } else {
-          onError(result.message);
+        } catch (e) {
+          onError("Failed to import server");
         }
       } else {
         onError("无法识别的 JSON 格式。需要 MCP 服务器配置格式。");
@@ -126,37 +125,29 @@ export const MCPImportExport: React.FC<MCPImportExportProps> = ({
         let imported = 0;
         let failed = 0;
 
-        for (const [name, config] of Object.entries(jsonData.mcpServers)) {
+        for (const [id, spec] of Object.entries(jsonData.mcpServers)) {
           try {
-            const serverConfig = {
-              type: "stdio",
-              command: (config as any).command,
-              args: (config as any).args || [],
-              env: (config as any).env || {}
-            };
-            
-            const result = await api.mcpAddJson(name, JSON.stringify(serverConfig), importScope);
-            if (result.success) {
-              imported++;
-            } else {
-              failed++;
-            }
+            const serverSpec = spec as MCPServerSpec;
+            await api.mcpUpsertServer(id, id, serverSpec, importApps);
+            imported++;
           } catch (e) {
+            console.error(`Failed to import server ${id}:`, e);
             failed++;
           }
         }
-        
+
         onImportCompleted(imported, failed);
       } else if (jsonData.type && jsonData.command) {
         // Single server format
         const name = prompt("请输入此服务器的名称：");
         if (!name) return;
 
-        const result = await api.mcpAddJson(name, content, importScope);
-        if (result.success) {
+        try {
+          const serverSpec = jsonData as MCPServerSpec;
+          await api.mcpUpsertServer(name, name, serverSpec, importApps);
           onImportCompleted(1, 0);
-        } else {
-          onError(result.message);
+        } catch (e) {
+          onError("Failed to import server");
         }
       } else {
         onError("无法识别的 JSON 格式。需要 MCP 服务器配置格式。");
@@ -212,24 +203,44 @@ export const MCPImportExport: React.FC<MCPImportExportProps> = ({
       </div>
 
       <div className="space-y-4">
-        {/* Import Scope Selection */}
+        {/* 应用选择器（新增） */}
         <Card className="p-4">
           <div className="space-y-3">
             <div className="flex items-center gap-2 mb-2">
               <Settings2 className="h-4 w-4 text-slate-500" />
-              <Label className="text-sm font-medium">导入范围</Label>
+              <Label className="text-sm font-medium">导入到应用</Label>
             </div>
-            <SelectComponent
-              value={importScope}
-              onValueChange={(value: string) => setImportScope(value)}
-              options={[
-                { value: "local", label: "本地 (仅此项目)" },
-                { value: "project", label: "项目 (通过 .mcp.json 共享)" },
-                { value: "user", label: "用户 (所有项目)" },
-              ]}
-            />
+            <div className="flex gap-4 p-3 bg-muted/30 rounded-md">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={importApps.claude}
+                  onChange={(e) => setImportApps({ ...importApps, claude: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm font-medium">Claude</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={importApps.codex}
+                  onChange={(e) => setImportApps({ ...importApps, codex: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm font-medium">Codex</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={importApps.gemini}
+                  onChange={(e) => setImportApps({ ...importApps, gemini: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm font-medium">Gemini</span>
+              </label>
+            </div>
             <p className="text-xs text-muted-foreground">
-              选择从 JSON 文件导入的服务器的保存位置
+              选择要启用导入的服务器的应用（至少选择一个）
             </p>
           </div>
         </Card>

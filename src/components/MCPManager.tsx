@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { Toast, ToastContainer } from "@/components/ui/toast";
-import { api, type MCPServer } from "@/lib/api";
+import { api, type McpServer } from "@/lib/api";
 import { MCPServerList } from "./MCPServerList";
 import { MCPAddServer } from "./MCPAddServer";
 import { MCPImportExport } from "./MCPImportExport";
@@ -32,7 +32,7 @@ export const MCPManager: React.FC<MCPManagerProps> = ({
 }) => {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState("servers");
-  const [servers, setServers] = useState<MCPServer[]>([]);
+  const [servers, setServers] = useState<McpServer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -49,7 +49,7 @@ export const MCPManager: React.FC<MCPManagerProps> = ({
   const loadServers = async (forceRefresh = false) => {
     const now = Date.now();
     const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
-    
+
     // Check cache validity
     if (!forceRefresh && cacheTimestamp && servers.length > 0 && (now - cacheTimestamp) < CACHE_DURATION) {
       return; // Use cached data, no loading state needed
@@ -61,8 +61,28 @@ export const MCPManager: React.FC<MCPManagerProps> = ({
         setLoading(true);
       }
       setError(null);
-      const serverList = await api.mcpList();
-      setServers(serverList);
+
+      // 使用新的 API 获取服务器
+      const serversMap = await api.mcpGetAllServers();
+
+      // 转换为数组格式（包含 ID 和应用状态）
+      const serversList: McpServer[] = Object.entries(serversMap).map(([id, spec]) => ({
+        id,
+        name: id, // 使用 ID 作为名称
+        server: spec,
+        apps: {
+          claude: true,  // 默认从 Claude 加载，所以标记为 true
+          codex: false,
+          gemini: false,
+        },
+        // 可选字段
+        description: undefined,
+        homepage: undefined,
+        docs: undefined,
+        tags: [],
+      }));
+
+      setServers(serversList);
       setCacheTimestamp(now);
     } catch (err) {
       console.error("MCPManager: Failed to load MCP servers:", err);
@@ -84,9 +104,9 @@ export const MCPManager: React.FC<MCPManagerProps> = ({
   /**
    * Handles server removed event
    */
-  const handleServerRemoved = (name: string) => {
-    setServers(prev => prev.filter(s => s.name !== name));
-    setToast({ message: t('mcp.deleteSuccess', { name }), type: "success" });
+  const handleServerRemoved = (id: string) => {
+    setServers(prev => prev.filter(s => s.id !== id));
+    setToast({ message: t('mcp.deleteSuccess', { name: id }), type: "success" });
   };
 
   /**
