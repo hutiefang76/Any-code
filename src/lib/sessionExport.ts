@@ -7,6 +7,7 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import type { ClaudeStreamMessage } from '@/types/claude';
 import type { Session } from '@/lib/api';
+import { clipboardService } from '@/lib/clipboard';
 
 /**
  * 导出格式类型
@@ -283,17 +284,5 @@ export async function exportSession(
  * 复制内容到剪贴板
  */
 export async function copyToClipboard(content: string): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(content);
-  } catch (error) {
-    // 降级到传统方法
-    const textarea = document.createElement('textarea');
-    textarea.value = content;
-    textarea.style.position = 'fixed';
-    textarea.style.opacity = '0';
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand('copy');
-    document.body.removeChild(textarea);
-  }
+  await clipboardService.writeText(content);
 }

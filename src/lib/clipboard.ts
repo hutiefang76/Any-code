@@ -23,6 +23,7 @@
  */
 interface TauriWindow extends Window {
   __TAURI_INTERNALS__?: unknown;
+  __TAURI__?: unknown;
 }
 
 let tauriInvoke:
@@ -37,7 +38,8 @@ const isTauriEnvironment = (): boolean => {
   return (
     typeof window !== "undefined" &&
     // ✅ FIXED: Improved type safety
-    Boolean((window as TauriWindow).__TAURI_INTERNALS__)
+    (Boolean((window as TauriWindow).__TAURI_INTERNALS__) ||
+      Boolean((window as TauriWindow).__TAURI__))
   );
 };
 
