@@ -967,6 +967,7 @@ export class CodexEventConverter {
       result: `**Token Usage:** ${totalTokens} tokens (${usage.input_tokens} input${cacheInfo}, ${usage.output_tokens} output)`,
       timestamp: ts,
       receivedAt: ts,
+      engine: 'codex' as const,
       usage,
     };
   }

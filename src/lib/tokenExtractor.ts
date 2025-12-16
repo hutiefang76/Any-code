@@ -206,7 +206,8 @@ export function extractMessageTokens(message: ClaudeStreamMessage | ExtendedClau
   // 尝试从不同位置获取usage数据（基于代码分析的优先级）
   const primaryUsage = (message as ExtendedClaudeStreamMessage).message?.usage; // 优先级1：message.usage (主要使用)
   const secondaryUsage = message.usage; // 优先级2：顶层usage
-  const rawUsage: RawTokenUsage = primaryUsage || secondaryUsage || {};
+  const codexUsage = (message as any).codexMetadata?.usage; // 优先级3：Codex metadata usage
+  const rawUsage: RawTokenUsage = primaryUsage || secondaryUsage || codexUsage || {};
 
   // 委托给核心标准化函数
   return normalizeRawUsage(rawUsage);

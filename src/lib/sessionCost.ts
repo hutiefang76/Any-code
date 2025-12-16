@@ -56,7 +56,12 @@ export function aggregateSessionCost(messages: ClaudeStreamMessage[]): SessionCo
   const eventMap = new Map<string, MutableBillingEvent>();
 
   messages.forEach((message, index) => {
-    if (message.type !== 'assistant') {
+    // Claude: 只处理 assistant 消息
+    // Codex: 处理 assistant 消息和包含 usage 数据的 system 消息
+    const isAssistant = message.type === 'assistant';
+    const isCodexUsageMessage = message.type === 'system' && (message as any).usage;
+
+    if (!isAssistant && !isCodexUsageMessage) {
       return;
     }
 
