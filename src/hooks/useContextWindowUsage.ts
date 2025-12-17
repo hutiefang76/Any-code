@@ -47,13 +47,28 @@ export interface UseContextWindowUsageResult extends ContextWindowUsage {
  * 而不是单条消息的增量 token 数。
  */
 function getUsageCandidate(message: any, engine?: string): any | null {
-  // Codex: 优先使用 codexMetadata.usage（通常为累计/快照值），避免 token_count 的 delta usage 误用
-  if (engine === 'codex' && message.codexMetadata?.usage && typeof message.codexMetadata.usage === 'object') {
-    return message.codexMetadata.usage;
+  // Codex: 过滤掉累计 usage 事件（会远超上下文窗口大小，不能用于 Context Window）
+  if (engine === 'codex') {
+    const codexItemType = message?.codexMetadata?.codexItemType;
+    if (codexItemType === 'thread_token_usage_updated') {
+      return null;
+    }
   }
 
   const usage = message.usage || message.message?.usage;
   if (usage && typeof usage === 'object') return usage;
+
+  // Codex: fallback to codexMetadata.usage (when available)
+  // 注意：token_count 的 codexMetadata.usage 通常是累计 total，不能用于上下文窗口；其 delta 在 message.usage 中。
+  if (engine === 'codex') {
+    const codexItemType = message?.codexMetadata?.codexItemType;
+    if (codexItemType === 'token_count') {
+      return null;
+    }
+    if (message.codexMetadata?.usage && typeof message.codexMetadata.usage === 'object') {
+      return message.codexMetadata.usage;
+    }
+  }
 
   return null;
 }
@@ -73,7 +88,7 @@ function normalizeUsageForIndicator(rawUsage: any): {
   };
 }
 
-function extractCurrentUsage(messages: ClaudeStreamMessage[], engine?: string): {
+function extractCurrentUsage(messages: ClaudeStreamMessage[], engine?: string, contextWindowSize?: number): {
   inputTokens: number;
   outputTokens: number;
   cacheCreationTokens: number;
@@ -86,6 +101,14 @@ function extractCurrentUsage(messages: ClaudeStreamMessage[], engine?: string): 
     if (!usage) continue;
 
     const normalized = normalizeUsageForIndicator(usage);
+    // Codex: 忽略明显不可能的“累计 token”值（上下文窗口内 tokens 不应远超窗口大小）
+    if (engine === 'codex' && typeof contextWindowSize === 'number' && contextWindowSize > 0) {
+      const maybeCurrent =
+        normalized.inputTokens + normalized.cacheCreationTokens + normalized.cacheReadTokens;
+      if (maybeCurrent > contextWindowSize * 1.1) {
+        continue;
+      }
+    }
     if (
       normalized.inputTokens > 0 ||
       normalized.outputTokens > 0 ||
@@ -130,7 +153,8 @@ export function useContextWindowUsage(
     if (engine === 'codex') {
       for (let i = messages.length - 1; i >= 0; i--) {
         const maybeCtx = (messages[i] as any)?.codexMetadata?.modelContextWindow;
-        if (typeof maybeCtx === 'number' && maybeCtx > 0) {
+        // 仅在运行时值更大时采用，避免把“可用窗口/阈值”之类的较小值误当作模型总窗口
+        if (typeof maybeCtx === 'number' && maybeCtx > contextWindowSize) {
           contextWindowSize = maybeCtx;
           break;
         }
@@ -160,7 +184,7 @@ export function useContextWindowUsage(
     }
 
     // 注意：这里的 usage 代表当前使用量快照（最后一条可用 usage），而不是增量累加。
-    const currentUsage = extractCurrentUsage(messages, engine);
+    const currentUsage = extractCurrentUsage(messages, engine, contextWindowSize);
 
     if (!currentUsage) {
       return defaultResult;
