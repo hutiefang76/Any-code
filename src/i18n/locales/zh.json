@@ -1172,7 +1172,13 @@
     "selectAllOnPage": "全选当前页"
   },
   "sessionHeader": {
-    "enterPathOrBrowse": "输入项目路径或点击浏览按钮选择"
+    "enterPathOrBrowse": "输入项目路径或点击浏览按钮选择",
+    "projectPath": "项目路径",
+    "browse": "浏览",
+    "selectProjectDirectory": "选择项目目录",
+    "selectProjectPrompt": "选择或输入一个项目目录来开始新会话",
+    "projectPathPlaceholder": "请输入项目路径...",
+    "recentProjects": "最近项目"
   },
   "promptNavigator": {
     "searchPrompts": "搜索提示词... (Ctrl+F)"

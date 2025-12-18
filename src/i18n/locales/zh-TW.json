@@ -1173,7 +1173,13 @@
     "selectAllOnPage": "全選目前頁"
   },
   "sessionHeader": {
-    "enterPathOrBrowse": "輸入專案路徑或點擊瀏覽按鈕選擇"
+    "enterPathOrBrowse": "輸入專案路徑或點擊瀏覽按鈕選擇",
+    "projectPath": "專案路徑",
+    "browse": "瀏覽",
+    "selectProjectDirectory": "選擇專案目錄",
+    "selectProjectPrompt": "選擇或輸入一個專案目錄來開始新對話",
+    "projectPathPlaceholder": "請輸入專案路徑...",
+    "recentProjects": "最近專案"
   },
   "promptNavigator": {
     "searchPrompts": "搜尋提示詞... (Ctrl+F)"

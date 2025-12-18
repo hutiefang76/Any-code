@@ -1140,7 +1140,13 @@
     "selectAllOnPage": "Select All on Page"
   },
   "sessionHeader": {
-    "enterPathOrBrowse": "Enter project path or click browse button to select"
+    "enterPathOrBrowse": "Enter project path or click browse button to select",
+    "projectPath": "Project Path",
+    "browse": "Browse",
+    "selectProjectDirectory": "Select Project Directory",
+    "selectProjectPrompt": "Select or enter a project directory to start a new session",
+    "projectPathPlaceholder": "Enter project path...",
+    "recentProjects": "Recent Projects"
   },
   "promptNavigator": {
     "searchPrompts": "Search prompts... (Ctrl+F)"
