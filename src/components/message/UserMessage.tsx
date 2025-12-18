@@ -35,9 +35,124 @@ interface UserMessageProps {
  * 检查是否是 Skills 消息
  */
 const isSkillsMessage = (text: string): boolean => {
-  return text.includes('<command-name>') 
+  return text.includes('<command-name>')
     || text.includes('Launching skill:')
     || text.includes('skill is running');
+};
+
+/**
+ * 检查是否是斜杠命令输出消息
+ * Claude CLI 的斜杠命令（如 /cost, /context）输出会包含 <local-command-stdout> 标签
+ */
+const isSlashCommandOutput = (text: string): boolean => {
+  return text.includes('<local-command-stdout>');
+};
+
+/**
+ * 格式化斜杠命令输出
+ * 提取 <local-command-stdout> 标签内的内容并美化显示
+ */
+const formatSlashCommandOutput = (text: string): React.ReactNode => {
+  // 提取 local-command-stdout 内容
+  const match = text.match(/<local-command-stdout>([\s\S]*?)<\/local-command-stdout>/);
+  if (!match) return text;
+
+  const content = match[1].trim();
+
+  // 检测是否是表格格式（包含 | 分隔符）
+  const isTable = content.includes('|') && content.includes('---');
+
+  if (isTable) {
+    // 解析并渲染表格
+    const lines = content.split('\n').filter(line => line.trim());
+    const tableRows: string[][] = [];
+
+    for (const line of lines) {
+      // 跳过分隔行（如 |---|---|---|）
+      if (line.match(/^\|[-\s|]+\|$/)) continue;
+
+      // 解析表格行
+      const cells = line.split('|').filter(cell => cell.trim()).map(cell => cell.trim());
+      if (cells.length > 0) {
+        tableRows.push(cells);
+      }
+    }
+
+    if (tableRows.length > 0) {
+      const [header, ...dataRows] = tableRows;
+      return (
+        <div className="space-y-3">
+          {/* 非表格内容（如标题） */}
+          {content.split('\n').filter(line => !line.includes('|')).map((line, i) => (
+            line.trim() && (
+              <div key={i} className={line.startsWith('#') ? 'font-semibold text-sm' : 'text-sm'}>
+                {line.replace(/^#+\s*/, '')}
+              </div>
+            )
+          ))}
+
+          {/* 表格 */}
+          <div className="overflow-x-auto">
+            <table className="text-xs w-full border-collapse">
+              <thead>
+                <tr className="border-b border-border/50">
+                  {header.map((cell, i) => (
+                    <th key={i} className="text-left py-1 px-2 font-medium text-muted-foreground">
+                      {cell}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {dataRows.map((row, rowIdx) => (
+                  <tr key={rowIdx} className="border-b border-border/30 last:border-0">
+                    {row.map((cell, cellIdx) => (
+                      <td key={cellIdx} className="py-1 px-2">
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+  }
+
+  // 非表格内容 - 简单格式化显示
+  return (
+    <div className="space-y-1 text-sm">
+      {content.split('\n').map((line, i) => {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) return null;
+
+        // 标题样式
+        if (trimmedLine.startsWith('#')) {
+          return (
+            <div key={i} className="font-semibold mt-2 first:mt-0">
+              {trimmedLine.replace(/^#+\s*/, '')}
+            </div>
+          );
+        }
+
+        // 键值对样式（如 **Key:** Value）
+        const kvMatch = trimmedLine.match(/^\*\*(.+?)\*\*:?\s*(.*)$/);
+        if (kvMatch) {
+          return (
+            <div key={i} className="flex gap-2">
+              <span className="font-medium">{kvMatch[1]}:</span>
+              <span className="text-muted-foreground">{kvMatch[2]}</span>
+            </div>
+          );
+        }
+
+        // 普通行
+        return <div key={i}>{trimmedLine}</div>;
+      })}
+    </div>
+  );
 };
 
 /**
@@ -172,12 +287,18 @@ export const UserMessage: React.FC<UserMessageProps> = ({
 
   // ⚡ 检查是否是 Skills 消息
   const isSkills = isSkillsMessage(text);
-  // 使用清理后的文本（移除图片路径），但 Skills 消息保持原样
-  const displayContent = isSkills ? formatSkillsMessage(text) : (cleanText || text);
+  // 🆕 检查是否是斜杠命令输出
+  const isCommandOutput = isSlashCommandOutput(text);
+  // 使用清理后的文本（移除图片路径），但特殊消息保持原样
+  const displayContent = isSkills
+    ? formatSkillsMessage(text)
+    : isCommandOutput
+    ? formatSlashCommandOutput(text)
+    : (cleanText || text);
 
   // 🆕 计算是否需要折叠（超过 5 行）
   useEffect(() => {
-    if (!contentRef.current || isSkills || !displayContent) {
+    if (!contentRef.current || isSkills || isCommandOutput || !displayContent) {
       setShouldCollapse(false);
       return;
     }
@@ -192,7 +313,7 @@ export const UserMessage: React.FC<UserMessageProps> = ({
     } else {
       setShouldCollapse(false);
     }
-  }, [text, isSkills, displayContent]);
+  }, [text, isSkills, isCommandOutput, displayContent]);
 
   // 检测撤回能力
   useEffect(() => {
@@ -262,7 +383,7 @@ export const UserMessage: React.FC<UserMessageProps> = ({
         {/* 消息内容和撤回按钮 - 优化布局，按钮悬浮在右下角 */}
         <div className="relative min-w-0">
           {/* Actions Toolbar - Visible on Hover (Left side for User messages) */}
-          {!isSkills && (
+          {!isSkills && !isCommandOutput && (
             <div className="absolute -top-2 left-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
               <MessageActions content={text} />
             </div>
@@ -277,7 +398,7 @@ export const UserMessage: React.FC<UserMessageProps> = ({
                   ref={contentRef}
                   className={cn(
                     "text-sm leading-relaxed",
-                    isSkills ? "" : "whitespace-pre-wrap break-words",
+                    (isSkills || isCommandOutput) ? "" : "whitespace-pre-wrap break-words",
                     // 折叠样式：未展开时限制为 5 行
                     shouldCollapse && !isExpanded && "line-clamp-5 overflow-hidden"
                   )}
@@ -285,7 +406,7 @@ export const UserMessage: React.FC<UserMessageProps> = ({
                 >
                   {displayContent}
                   {/* 占位符，确保文字不遮挡绝对定位的按钮 */}
-                  {showRevertButton && !isSkills && (
+                  {showRevertButton && !isSkills && !isCommandOutput && (
                     <span className="inline-block w-8 h-4 align-middle select-none" aria-hidden="true" />
                   )}
                 </div>
@@ -313,8 +434,8 @@ export const UserMessage: React.FC<UserMessageProps> = ({
             )}
           </div>
 
-          {/* 撤回按钮和警告图标 - Skills 消息不显示撤回按钮 */}
-          {showRevertButton && !isSkills && (
+          {/* 撤回按钮和警告图标 - Skills/命令输出消息不显示撤回按钮 */}
+          {showRevertButton && !isSkills && !isCommandOutput && (
             <div className="absolute bottom-0 right-0 flex items-center justify-end gap-1">
               {/* CLI 提示词警告图标 */}
               {hasWarning && (
