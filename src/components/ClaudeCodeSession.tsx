@@ -366,11 +366,21 @@ const ClaudeCodeSessionInner: React.FC<ClaudeCodeSessionProps> = ({
     processMessageWithTranslation
   });
 
+  // 🆕 包装 handleSendPrompt，发送消息时自动滚动到底部
+  // 解决问题：当用户滚动查看历史消息后发送新消息，页面不会自动滚动到底部
+  const handleSendPromptWithScroll = useCallback((prompt: string, model: ModelType, maxThinkingTokens?: number) => {
+    // 重置滚动状态，确保发送消息后自动滚动到底部
+    setUserScrolled(false);
+    setShouldAutoScroll(true);
+
+    handleSendPrompt(prompt, model, maxThinkingTokens);
+  }, [handleSendPrompt, setUserScrolled, setShouldAutoScroll]);
+
   // 🆕 方案 B-1: 设置发送提示词回调，用于计划批准后自动执行
   useEffect(() => {
     // 创建一个简化的发送函数，只需要 prompt 参数
     const simpleSendPrompt = (prompt: string) => {
-      handleSendPrompt(prompt, 'sonnet'); // 使用默认模型
+      handleSendPromptWithScroll(prompt, 'sonnet'); // 使用默认模型
     };
     setSendPromptCallback(simpleSendPrompt);
 
@@ -378,12 +388,12 @@ const ClaudeCodeSessionInner: React.FC<ClaudeCodeSessionProps> = ({
     return () => {
       setSendPromptCallback(null);
     };
-  }, [handleSendPrompt, setSendPromptCallback]);
+  }, [handleSendPromptWithScroll, setSendPromptCallback]);
 
   // 🆕 设置 UserQuestion 的发送消息回调，用于答案提交后自动发送
   useEffect(() => {
     const simpleSendMessage = (message: string) => {
-      handleSendPrompt(message, 'sonnet'); // 使用默认模型
+      handleSendPromptWithScroll(message, 'sonnet'); // 使用默认模型
     };
     setSendMessageCallback(simpleSendMessage);
 
@@ -391,7 +401,7 @@ const ClaudeCodeSessionInner: React.FC<ClaudeCodeSessionProps> = ({
     return () => {
       setSendMessageCallback(null);
     };
-  }, [handleSendPrompt, setSendMessageCallback]);
+  }, [handleSendPromptWithScroll, setSendMessageCallback]);
 
   // Load recent projects when component mounts (only for new sessions)
   useEffect(() => {
@@ -1089,7 +1099,7 @@ const ClaudeCodeSessionInner: React.FC<ClaudeCodeSessionProps> = ({
           <FloatingPromptInput
             className="flex-shrink-0 transition-[left] duration-300"
             ref={floatingPromptRef}
-            onSend={handleSendPrompt}
+            onSend={handleSendPromptWithScroll}
             onCancel={handleCancelExecution}
             isLoading={isLoading}
             disabled={!projectPath}
