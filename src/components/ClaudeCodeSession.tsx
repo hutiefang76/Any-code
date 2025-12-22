@@ -558,7 +558,7 @@ const ClaudeCodeSessionInner: React.FC<ClaudeCodeSessionProps> = ({
   // ✅ Smart scroll management (3 useEffect blocks) extracted to useSmartAutoScroll Hook
 
   // ✅ Session lifecycle functions (loadSessionHistory, checkForActiveSession, reconnectToSession)
-  // are now provided by useSessionLifecycle Hook
+  // are now provided by useSessionStream Hook (新架构)
 
   const handleSelectPath = async () => {
     try {
@@ -827,7 +827,7 @@ const ClaudeCodeSessionInner: React.FC<ClaudeCodeSessionProps> = ({
         );
 
         if (sessionEngine === 'codex' && Array.isArray(history)) {
-          // 将 Codex 事件转换为消息格式（与 useSessionLifecycle 保持一致）
+          // 将 Codex 事件转换为消息格式（与 useSessionStream 保持一致）
           codexConverter.reset();
           const convertedMessages: any[] = [];
           for (const event of history) {
