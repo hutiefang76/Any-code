@@ -59,11 +59,67 @@ export const MCPWidget: React.FC<MCPWidgetProps> = ({
   // 解析结果内容
   const hasResult = result && result.content !== undefined;
   const isError = result?.is_error ?? false;
-  const resultContent = hasResult
-    ? typeof result.content === 'string'
-      ? result.content
-      : JSON.stringify(result.content, null, 2)
-    : '';
+
+  /**
+   * 递归提取内容中的文本
+   * 支持多种格式：字符串、数组、对象（含 text/message/content 字段）
+   */
+  const extractTextContent = (value: unknown): string => {
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    if (value == null) {
+      return '';
+    }
+
+    if (Array.isArray(value)) {
+      // 递归处理数组中的每个元素，用换行符连接
+      return value.map(extractTextContent).filter(Boolean).join('\n');
+    }
+
+    if (typeof value === 'object') {
+      const record = value as Record<string, unknown>;
+
+      // 优先提取 text 字段（MCP 工具常见格式）
+      if (typeof record.text === 'string') {
+        return record.text;
+      }
+
+      // 其次尝试 message 字段
+      if (typeof record.message === 'string') {
+        return record.message;
+      }
+
+      // 再次尝试 content 字段
+      if (typeof record.content === 'string') {
+        return record.content;
+      }
+
+      // 如果都没有，序列化为 JSON
+      try {
+        return JSON.stringify(record, null, 2);
+      } catch {
+        return String(record);
+      }
+    }
+
+    return String(value);
+  };
+
+  // 处理结果内容，将转义的换行符转换为实际换行符
+  const parseResultContent = (content: any): string => {
+    // 先提取文本内容
+    const text = extractTextContent(content);
+
+    // 然后处理转义字符
+    return text
+      .replace(/\\r\\n/g, '\n')
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t');
+  };
+
+  const resultContent = hasResult ? parseResultContent(result.content) : '';
   const resultTokens = hasResult ? Math.ceil(resultContent.length / 4) : 0;
 
   // 解析工具名称
